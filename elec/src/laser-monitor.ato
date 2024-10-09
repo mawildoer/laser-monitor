@@ -1,2 +1,151 @@
+from "usb-connectors/usb-connectors.ato" import USBCConn
+from "generics/interfaces.ato" import Power
+from "generics/capacitors.ato" import Capacitor
+from "generics/resistors.ato" import Resistor
+
 module LaserMonitor:
-    signal gnd
+    # let's make some nice clean power rails
+    usb = new USBCConn
+    power = new Power
+    usb.power ~ power
+
+    bypass_c1 = new Capacitor
+    bypass_c2 = new Capacitor
+    bypass_c1.value = 100nF to 200nF
+    bypass_c2.value = 100nF to 200nF
+    bypass_c1.power ~ power
+    bypass_c2.power ~ power
+
+    # squibbles to work out the rough order-of-magnitude resistor we likely need
+    r_amp = 250kΩ
+    v_out = r_amp * (10nA to 10uA)
+
+    # amplifier
+    amp = new OpAmp
+    sleep_pullup = new Resistor
+    sleep_pullup.value = 10kΩ to 100kΩ
+    sleep_pullup.package = "0402"
+    amp.sleep ~ sleep_pullup.1; sleep_pullup.2 ~ power.vcc
+    power ~ amp.power
+    power.gnd ~ amp.non_inverting_input
+
+    ## placeholder for a future resistor once we've figured out the trim
+    final_resistor = new Resistor
+    final_resistor.package = "0402"
+    final_resistor.value = 250kΩ +/- 2%
+    final_resistor.do_not_place = True
+
+    ## trim
+    ### add 0Ω resistors in series with it to disconnect when we want to
+    trim_pot = new Optional
+    trim_pot.thing -> TrimPot250k
+    trim_pot.a_t ~ trim_pot.thing.a; trim_pot.thing.center ~ trim_pot.b_t
+
+    final_resistor.1 ~ trim_pot.a
+    final_resistor.2 ~ trim_pot.b
+
+    amp.out ~ final_resistor.1; final_resistor.2 ~ amp.inverting_input
+
+    # photodiode 1
+    photodiode1 = new Optional
+    photodiode1.thing -> HighSpeedPhotodiode
+    photodiode1.a_t ~ photodiode1.thing.anode; photodiode1.thing.cathode ~ photodiode1.b_t
+    power.gnd ~ photodiode1.a; photodiode1.b ~ amp.inverting_input
+
+    # photodiode 2
+    photodiode2 = new Optional
+    photodiode2.thing -> IRPhotodiode
+    photodiode2.a_t ~ photodiode2.thing.anode; photodiode2.thing.cathode ~ photodiode2.b_t
+    power.gnd ~ photodiode2.a; photodiode2.b ~ amp.inverting_input
+
+    # output connector
+    signal_connector = new BNC_connector
+    amp.out ~ signal_connector.core
+    power.gnd ~ signal_connector.shield
+
+
+module _Thing:
+    """
+    A placeholder for a component that may or may not be present.
+    """
+    do_not_place = True
+
+
+module Optional:
+    signal a
+    signal b
+    signal a_t
+    signal b_t
+    thing = new _Thing
+
+    _a = new Resistor
+    _b = new Resistor
+    _a.package = "0402"
+    _b.package = "0402"
+    _a.value = 0Ω
+    _b.value = 0Ω
+
+    a ~ _a.1; _a.2 ~ a_t
+    b ~ _b.1; _b.2 ~ b_t
+
+
+component BNC_connector:
+    # component DOSIN_minus_801_minus_0051
+    footprint = "BNC-TH_DOSIN-801-0051"
+    lcsc_id = "C521211"
+    mpn = "C521211"
+    # pins
+    signal core ~ pin 1
+    signal shield ~ pin 2
+    shield ~ pin 3
+    shield ~ pin 4
+    shield ~ pin 5
+
+
+component IRPhotodiode:
+    # component ZPD053B_minus_60_minus_S40
+    footprint = "LED-TH_BD5.8-P2.54-FD"
+    lcsc_id = "C575385"
+    mpn = "C575385"
+    # pins
+    signal cathode ~ pin 2
+    signal anode ~ pin 1
+
+
+component OpAmp:
+    # component ADA4817_minus_1ACPZ_minus_R7
+    footprint = "LFCSP-8_L3.0-W3.0-P0.50-BL-EP-1"
+    lcsc_id = "C514314"
+    mpn = "C514314"
+
+    power = new Power
+
+    # pins
+    signal sleep ~ pin 1  # pull-high
+    signal FB ~ pin 2
+    signal inverting_input ~ pin 3
+    signal non_inverting_input ~ pin 4
+    power.vcc ~ pin 5
+    signal out ~ pin 7
+    power.vcc ~ pin 8
+
+
+component TrimPot250k:
+    # component _3296W_minus_1_minus_254LF
+    footprint = "RES-ADJ-TH_3296W"
+    lcsc_id = "C83691"
+    mpn = "C83691"
+    # pins
+    signal a ~ pin 1
+    signal center ~ pin 2
+    signal b ~ pin 3
+
+
+component HighSpeedPhotodiode:
+    # component PD70_minus_01B_slash_TR10
+    footprint = "SENSOR-SMD_L4.4-W3.9"
+    lcsc_id = "C72056"
+    mpn = "C72056"
+    # pins
+    signal anode ~ pin 1
+    signal cathode ~ pin 2
