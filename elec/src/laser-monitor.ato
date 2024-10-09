@@ -6,15 +6,14 @@ from "generics/resistors.ato" import Resistor
 module LaserMonitor:
     # let's make some nice clean power rails
     usb = new USBCConn
-    power = new Power
-    usb.power ~ power
+    signal gnd ~ usb.power.gnd
 
     bypass_c1 = new Capacitor
     bypass_c2 = new Capacitor
     bypass_c1.value = 100nF to 200nF
     bypass_c2.value = 100nF to 200nF
-    bypass_c1.power ~ power
-    bypass_c2.power ~ power
+    bypass_c1.power ~ usb.power
+    bypass_c2.power ~ usb.power
 
     # squibbles to work out the rough order-of-magnitude resistor we likely need
     r_amp = 250kΩ
@@ -25,9 +24,9 @@ module LaserMonitor:
     sleep_pullup = new Resistor
     sleep_pullup.value = 10kΩ to 100kΩ
     sleep_pullup.package = "0402"
-    amp.sleep ~ sleep_pullup.1; sleep_pullup.2 ~ power.vcc
-    power ~ amp.power
-    power.gnd ~ amp.non_inverting_input
+    amp.sleep ~ sleep_pullup.1; sleep_pullup.2 ~ usb.power.vcc
+    usb.power ~ amp.power  # power the amp from the USB because it requires 5V
+    gnd ~ amp.non_inverting_input
 
     ## placeholder for a future resistor once we've figured out the trim
     final_resistor = new Resistor
@@ -44,24 +43,24 @@ module LaserMonitor:
     final_resistor.1 ~ trim_pot.a
     final_resistor.2 ~ trim_pot.b
 
-    amp.out ~ final_resistor.1; final_resistor.2 ~ amp.inverting_input
+    amp.FB ~ final_resistor.1; final_resistor.2 ~ amp.inverting_input  # the FB pin is internally tied to the output, but improves layout
 
     # photodiode 1
     photodiode1 = new Optional
     photodiode1.thing -> HighSpeedPhotodiode
     photodiode1.a_t ~ photodiode1.thing.anode; photodiode1.thing.cathode ~ photodiode1.b_t
-    power.gnd ~ photodiode1.a; photodiode1.b ~ amp.inverting_input
+    gnd ~ photodiode1.a; photodiode1.b ~ amp.inverting_input
 
     # photodiode 2
     photodiode2 = new Optional
     photodiode2.thing -> IRPhotodiode
     photodiode2.a_t ~ photodiode2.thing.anode; photodiode2.thing.cathode ~ photodiode2.b_t
-    power.gnd ~ photodiode2.a; photodiode2.b ~ amp.inverting_input
+    gnd ~ photodiode2.a; photodiode2.b ~ amp.inverting_input
 
     # output connector
     signal_connector = new BNC_connector
     amp.out ~ signal_connector.core
-    power.gnd ~ signal_connector.shield
+    gnd ~ signal_connector.shield
 
 
 module _Thing:
@@ -95,11 +94,11 @@ component BNC_connector:
     lcsc_id = "C521211"
     mpn = "C521211"
     # pins
-    signal core ~ pin 1
-    signal shield ~ pin 2
+    signal shield ~ pin 1
+    shield ~ pin 2
     shield ~ pin 3
     shield ~ pin 4
-    shield ~ pin 5
+    signal core ~ pin 5
 
 
 component IRPhotodiode:
