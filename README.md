@@ -1,3 +1,3 @@
-# laser-monitor
+# Laser Monitor
 
-Wooohooo a new package!
+A pair of IR diodes for monitoring laser reflectance
